@@ -1,0 +1,256 @@
+# Problem 179 最大数
+
+> 给定一组非负整数 `nums`，重新排列每个数的顺序（每个数不可拆分）使之组成一个最大的整数
+>
+> **注意：**输出结果可能非常大，所以你需要返回一个字符串而不是整数。
+>
+> **提示：**
+>
+> - `1 <= nums.length <= 100`
+> - `0 <= nums[i] <= 109`
+
+示例1：
+
+输入：nums = [10, 2]
+输出："210"
+
+示例2：
+
+```
+输入：nums = [3,30,34,5,9]
+输出："9534330"
+```
+
+## 分析：
+
+题目要求：重新排列每个数的顺序，使之组成一个最大的整数
+
+那么我们要做的就是：
+
+- 排序
+- 排序准则是：满足组成更大的整数的排序序列更优
+
+所以一种直接的思路就是，遍历所有可能的序列，找出最大的值，并返回字符串；但是输出结果可能非常大，甚至超过整型数据的表示范围，所以这种思路不可取；
+
+那么必须在拼接成字符串的时候就要确定各个数字的顺序，或者说必须先确定顺序再进行拼接；一个直观的印象是`高位数字越大，数值就越大`，所以这个时候就有：
+
+- 如果两个数字长度一样，那么数值大的放在前面
+- 如果两个数字a, b长度不一样，如分别是m和n位，其中m<n
+  - 比较a和b的前m位，前m位大的放在前面
+  - 如果a和b的前m位相同，则将b的前m+1到前max{m+1+m, n}与a的前 max{m+1+m, n}比较，大的放在前面，若相同则重复此步骤，直到将b的n位比较完毕
+  - 如果数字b的各位比较完毕且依然相同
+    - 若n%m==0,则a, b相同，无先后顺序，可任意排列
+    - 若n%m != 0,则将b的后n%m位补上a的前m-n%m位，将此值与a比较，大的在前，小的在后
+
+时间复杂度：主要是排序上的花费，O(nlgn)
+
+### 方法1
+
+```python
+class Solution(object):
+    def largestNumber(self, nums: List[int]) -> str:
+        '''
+        type nums: List[int]
+        rtype: str
+        '''
+        ans = ''
+        nums = sorted([str(x) for x in nums], key = LargestKey, reverse = True)
+        ans = ''.join(nums)
+        if ans == '0' * len(ans):
+            return '0'
+        return ans
+
+class LargestKey(str):
+    def __lt__(x, y):
+        xLen = len(x)
+        yLen = len(y)
+        xStr = x
+        yStr = y
+        if xLen == yLen:
+            return str(x) < str(y)
+        elif xLen < yLen:
+            sec = math.ceil(yLen/xLen)
+            sup = sec * xLen - yLen
+            upyStr = yStr + xStr[:sup]
+            for i in range(sec):
+                if xStr == upyStr[xLen * i:xLen * (i + 1)]:
+                    continue
+                return xStr < upyStr[xLen * i:xLen * (i + 1)]
+        elif xLen > yLen:
+            sec = math.ceil(xLen/yLen)
+            sup = sec * yLen - xLen
+            upxStr = xStr + yStr[:sup]
+            for i in range(sec):
+                if upxStr[yLen * i:yLen * (i + 1)] == yStr:
+                    continue
+                return upxStr[yLen * i:yLen * (i + 1)] < yStr
+```
+
+上面这种思路成立的原因主要基于以下两点（偏向于直观经验）：
+
+1. 高位数越大，则数值越大
+2. 数的位数不同，但高位数相同，则把多余的位数向后补上短数的前几位直到与短数一样长，再进行比较
+
+例如：
+
+```
+5025与502 等价于 502与502、502与550
+50250与502 等价于 502与502、505与502
+```
+
+所以，为了比较两个数值的先后顺序，一种更直观的方法是：
+
+**将两个数拼接起来，比较两种情况的大小；由于两个数拼接起来顺序不一致，但是长度一致；考虑到拼接后可能超过整数数值表示范围的情况，可以直接用字符串进行比较**
+
+### 方法2
+
+```python
+class LargerNumKey(str):
+    def __lt__(x, y):
+        return x+y < y+x
+ 
+ 
+class Solution(object):
+    def largestNumber(self, nums):
+        """
+        :type nums: List[int]
+        :rtype: str
+        """
+        str_nums = sorted([str(n) for n in nums], key=LargerNumKey, reverse=True)      
+        ans = "".join(str_nums)
+        if ans == "0"*len(ans):
+            return "0"
+        return ans
+```
+
+## 编码中遇到的问题：
+
+### 问题1：递归超过最大深度
+
+> RecursionError: maximum recursion depth exceeded
+
+查询了一下：
+
+python的递归深度是有限制的，默认为1000。当递归深度超过1000时，就会报错。
+
+一般合理的代码是不会超过默认深度的，如果确实需要更深层的递归：
+
+```python
+import sys
+sys.setrecursionlimit(100000) #例如这里设置为十万
+```
+
+但是出现递归超限一般都是：递归代码中是否有结束条件，避免死循环，以及递归结束条件是否合理
+
+```python
+# 写法1
+class LargerNumKey(str):
+    def __lt__(x, y):
+        return x+y < y+x
+# 写法2    
+class LargerNumKey(str):
+    def __lt__(x, y):
+        return x < y
+```
+
+最后把问题定位到了这一块，写法1不报错，写法2报错，根据测试和推测可能是如下原因（未查阅资料进行验证）：
+
+```python
+# 写法1
+'''
+LargerNumber类 继承 str类
+重写比较符less than '<',这里的x和y分别代表一个LargerNumKey类的对象，照写法3可能更直观
+但是LargeNumber类没有重载str类的加法操作符，所以，x+y返回的是一个父类str对象
+所以，x+y和y+x可以直接进行比较
+'''
+class LargerNumKey(str): 
+    def __lt__(x, y):	 
+        return x+y < y+x 
+'''
+但是写法2这里，x<y这是是两个LargeNumKey对象进行比较，会调用重写的比较方法，自己调用自己，没有结束条件，这样就会陷入死循环，导致递归超限
+'''
+# 写法2    
+class LargerNumKey(str):
+    def __lt__(x, y):
+        return x < y
+    
+#写法3
+class LargeNumKey(str):
+    def __lt__(self, other):
+        return self + other < other + self
+```
+
+> 扩展：Python中的富比较方法
+>
+> operator.__lt__(a, b)
+>
+> operator.__le__(a, b)
+>
+> operator.__eq__(a, b)
+>
+> operator.__ne__(a, b)
+>
+> operator.__ge__(a, b)
+>
+> operator.__gt__(a, b)
+>
+> #返回bool值
+>
+> Python中**基类object提供了一系列可以用于实现同类对象进行“比较”的方法，可以用于同类对象的不同实例进行比较**，包括`__lt__、__gt__、__le__、__ge__、__eq__和__ne__`六个方法。
+
+示例：
+
+```python
+class Word(str):
+
+    def __init__(self, a):  # 在这重写父类的方法，对输入的字符串预处理（检查是否有空格）
+        if ' ' in a:        # a为待输入的参数
+            (self.b, self.c) = a.split(' ', 1)
+            self.d = self.b     # 有空格，则把第一个单词赋给d
+        else:
+            self.d = a          # 无空格，则原单词赋值给d
+
+    def __lt__(self, other):    # <
+        return len(self.d) < len(other)     #用d比较（这里的self.d可以理解为：实例名.d）
+
+    def __le__(self, other):    # <=
+        return len(self.d) <= len(other)
+
+    def __eq__(self, other):    # ==
+        return len(self.d) == len(other)
+
+    def __ne__(self, other):    # !=
+        return len(self.d) != len(other)
+
+    def __gt__(self, other):    # >
+        return len(self.d) > len(other)
+
+    def __ge__(self, other):    # >=
+        return len(self.d) >= len(other)
+
+
+li1 = Word('iii lll')
+li2 = Word('JJJJ')
+print(li1 <= li2 )
+print(li1.d)
+print(li2.d)
+```
+
+### 问题2：列表的extend方法
+
+```python
+>>> a = [1,2]
+>>> b = [3,4]
+>>> a
+[1, 2]
+>>> b
+[3, 4]
+>>> c = a.extend(b)
+>>> a
+[1, 2, 3, 4]
+>>> c
+```
+
+a.extend(b)就地修改a，不返回任何值，所以c这里是none;
+
+即就地排序或者就地修改不返回值的情况，不能作为右值，也不能作为方法或者函数的参数。
